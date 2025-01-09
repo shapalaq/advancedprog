@@ -1,52 +1,46 @@
 import streamlit as st
-from llama_index.core.llms import ChatMessage
 import logging
 import time
 from llama_index.llms.ollama import Ollama
-import chromadb
-import ollama
+from llama_index.core.llms import ChatMessage
+import PyPDF2  # Для обработки PDF
 
 logging.basicConfig(level=logging.INFO)
 
-ollama.embeddings(
-  model='all-minilm',
-  prompt='Llamas are members of the camelid family',
-)
+def read_file(file):
+    """
+    Функция для чтения содержимого файлов (PDF или TXT).
+    """
+    if file.name.endswith('.pdf'):
+        try:
+            pdf_reader = PyPDF2.PdfReader(file)
+            text = ""
+            for page in pdf_reader.pages:
+                text += page.extract_text()
+            return text
+        except Exception as e:
+            logging.error(f"Ошибка при чтении PDF: {str(e)}")
+            return "Не удалось прочитать PDF файл."
+    elif file.name.endswith('.txt'):
+        try:
+            return file.read().decode("utf-8")
+        except Exception as e:
+            logging.error(f"Ошибка при чтении TXT: {str(e)}")
+            return "Не удалось прочитать текстовый файл."
+    else:
+        return "Формат файла не поддерживается. Загрузите PDF или TXT."
 
-client = chromadb.Client()
-collection = client.get_or_create_collection(name="docs")
-
-if 'messages' not in st.session_state:
-    st.session_state.messages = []
-
-def store_embeddings_in_chromadb(prompt, response):
-    try:
-        # Create embeddings using ollama
-        prompt_embedding = ollama.embeddings(model='all-minilm', prompt=prompt)
-        response_embedding = ollama.embeddings(model='all-minilm', prompt=response)
-
-        # Add embeddings to Chromadb collection
-        collection.add(
-            documents=[prompt, response],
-            embeddings=[prompt_embedding, response_embedding],
-            metadatas=[{'type': 'prompt'}, {'type': 'response'}],
-            ids=[str(time.time()), str(time.time())]  # Use time as unique ids
-        )
-
-        logging.info(f"Stored prompt and response embeddings in Chromadb.")
-    
-    except Exception as e:
-        logging.error(f"Error storing embeddings: {str(e)}")
-
-def stream_chat(model, messages):
+def stream_chat(model, messages, temperature=0.7, max_tokens=256):
     try:
         llm = Ollama(model=model, request_timeout=120.0)
-        resp = llm.stream_chat(messages)
         response = ""
         response_placeholder = st.empty()
+
+        resp = llm.stream_chat(messages, temperature=temperature, max_tokens=max_tokens)
         for r in resp:
             response += r.delta
             response_placeholder.write(response)
+
         logging.info(f"Model: {model}, Messages: {messages}, Response: {response}")
         return response
     except Exception as e:
@@ -54,15 +48,29 @@ def stream_chat(model, messages):
         raise e
 
 def main():
-    st.title("Chat with LLMs Models")
-    logging.info("App started")
+    st.title("Chatbot с анализом файлов")
+    logging.info("Приложение запущено")
 
-    model = st.sidebar.selectbox("Choose a model", ["llama3.2:1b"])
-    logging.info(f"Model selected: {model}")
+    model = st.sidebar.selectbox("Выберите модель", ["llama3.1:8b", "llama3.2:1b", "all-minilm:latest"])
+    logging.info(f"Модель выбрана: {model}")
 
-    if prompt := st.chat_input("Your question"):
+    if 'messages' not in st.session_state:
+        st.session_state.messages = [
+            {"role": "system", "content": "Ты — умный ассистент, который может анализировать текстовые файлы."}
+        ]
+
+    uploaded_file = st.sidebar.file_uploader("Загрузите файл (PDF или TXT)", type=["pdf", "txt"])
+    if uploaded_file:
+        file_content = read_file(uploaded_file)
+        if file_content.startswith("Формат файла не поддерживается"):
+            st.sidebar.error(file_content)
+        else:
+            st.sidebar.success("Файл успешно загружен.")
+            st.session_state.messages.append({"role": "system", "content": f"Вот содержимое файла:\n\n{file_content}"})
+
+    if prompt := st.chat_input("Введите свой вопрос"):
         st.session_state.messages.append({"role": "user", "content": prompt})
-        logging.info(f"User input: {prompt}")
+        logging.info(f"Ввод пользователя: {prompt}")
 
         for message in st.session_state.messages:
             with st.chat_message(message["role"]):
@@ -71,23 +79,20 @@ def main():
         if st.session_state.messages[-1]["role"] != "assistant":
             with st.chat_message("assistant"):
                 start_time = time.time()
-                logging.info("Generating response")
+                logging.info("Генерация ответа...")
 
-                with st.spinner("Writing..."):
+                with st.spinner("Пишу..."):
                     try:
                         messages = [ChatMessage(role=msg["role"], content=msg["content"]) for msg in st.session_state.messages]
                         response_message = stream_chat(model, messages)
                         duration = time.time() - start_time
-                        response_message_with_duration = f"{response_message}\n\nDuration: {duration:.2f} seconds"
-                        st.session_state.messages.append({"role": "assistant", "content": response_message_with_duration})
-                        st.write(f"Duration: {duration:.2f} seconds")
-                        logging.info(f"Response: {response_message}, Duration: {duration:.2f} s")
-                        store_embeddings_in_chromadb(prompt, response_message_with_duration)
-                        
+                        st.session_state.messages.append({"role": "assistant", "content": response_message})
+                        st.write(f"Ответ сгенерирован за {duration:.2f} секунд.")
+                        logging.info(f"Ответ: {response_message}, Время: {duration:.2f} секунд")
                     except Exception as e:
                         st.session_state.messages.append({"role": "assistant", "content": str(e)})
-                        st.error("An error occurred while generating the response.")
-                        logging.error(f"Error: {str(e)}")
+                        st.error("Произошла ошибка при генерации ответа.")
+                        logging.error(f"Ошибка: {str(e)}")
 
 if __name__ == "__main__":
     main()
