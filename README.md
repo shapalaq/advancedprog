@@ -2,16 +2,16 @@
 Chat with LLMs Models
 
 # Description
-This project is a chat application that allows users to interact with language models (LLMs) like Ollama. The application enables users to ask questions, receive answers, and store messages (including embeddings) in a Chromadb database. Chat history is preserved even if the app is restarted, thanks to integration with Chromadb.
+This project is a chat application that allows users to interact with language models (LLMs) like Ollama. The application enables users to ask questions, receive answers, and store messages (including embeddings) in a Chromadb database. The app also supports file uploads, allowing users to load PDF and TXT files and ask questions based on their content. Chat history is preserved even if the app is restarted, thanks to integration with Chromadb.
 
 # Features
+
 Interaction with models through streaming (real-time).
+File Upload: Upload and process PDF and TXT files to ask questions about their content.
 Storing chat history (questions and answers) and embeddings in a database.
 Retrieving chat history upon app startup.
 Support for multiple models, such as llama3.2:1b.
 Storing embeddings to improve search quality and user interaction.
-Installation
-To work with this project, you'll need Python installed along with several dependencies.
 
 1. Install Python
 Ensure that Python 3.7 or later is installed. You can check the installed version using the following command:
@@ -20,20 +20,19 @@ bash
 python --version
 
 2. Install Dependencies
-Clone the repository and install the dependencies:
-
-bash
-git clone <URL>
-cd <project_folder>
-python -m venv venv
-source venv/bin/activate  # For macOS/Linux
-venv\Scripts\activate  # For Windows
-pip install -r requirements.txt
-Dependencies:
 streamlit — for displaying the interface.
 llama_index — for working with models and chat functionality.
 chromadb — for storing messages and embeddings.
 ollama — for generating embeddings and interacting with models.
+PyPDF2 — for extracting text from PDF files.
+
+bash
+git clone <repository_url>
+cd <project_folder>
+python -m venv venv
+source venv/bin/activate  # For macOS/Linux
+# For Windows use: venv\Scripts\activate
+pip install -r requirements.txt
 
 3. Install and Set Up Ollama
 To use the ollama library, you’ll need to install it if it’s not already installed:
